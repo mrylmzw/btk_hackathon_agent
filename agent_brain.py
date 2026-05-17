@@ -59,13 +59,21 @@ agent_executor = AgentExecutor(
 if __name__ == "__main__":
     print("\n=== AGENT 1: DUE DILIGENCE RISK ANALİZİ BAŞLADI ===")
     
+    # Promptu kesin bir JSON formatı üretecek şekilde güncelliyoruz:
     user_query = (
         "Analyze the uploaded company records. Check if there are any critical patent infringement "
         "or legal lawsuits going on. Also, analyze the company's financial health regarding its liquidity "
-        "and capital resources. Summarize your findings as a senior M&A expert."
+        "and capital resources. "
+        "CRITICAL RULE: You must return your final response ONLY as a raw JSON string. Do not wrap it in markdown code blocks like ```json. "
+        "The JSON must strictly follow this structure: "
+        "{"
+        "  'legal_risks': ['list of critical lawsuits or patent issues found'],"
+        "  'financial_risks': ['list of liquidity, debt or purchase obligations found'],"
+        "  'm_and_a_summary': 'Your executive summary as a senior M&A expert'"
+        "}"
     )
     
     response = agent_executor.invoke({"input": user_query})
     
-    print("\n=== AJANIN NİHAİ RAPOR ÇIKTISI ===")
+    print("\n=== AJANIN NİHAİ RAPOR ÇIKTISI (JSON FORMATINDA) ===")
     print(response["output"])
