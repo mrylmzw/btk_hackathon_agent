@@ -1,0 +1,11 @@
+sec-edgar-downloader
+beautifulsoup4
+lxml
+langchain-text-splitters
+langchain-community
+chromadb
+langchain-huggingface
+sentence-transformers
+langchain-google-genai
+langchain-classic
+langchainhub
