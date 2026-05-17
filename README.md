@@ -1,4 +1,3 @@
-```markdown
 # M&A Due Diligence Agent (Agent 1)
 
 Bu proje, Şirket Birleşme ve Devralmaları (M&A) sürecinde kurumsal belgeleri (SEC dökümanları vb.) otomatik olarak analiz eden, hukuki ve finansal riskleri ayrıştırarak yapılandırılmış JSON formatında rapor üreten ReAct (Reasoning and Acting) tabanlı bir yapay zeka ajanıdır.
