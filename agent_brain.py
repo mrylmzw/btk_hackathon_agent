@@ -1,7 +1,9 @@
 import os
-# Gerekli olan eksik import satırımız:
+# import streamlit as st  # Arayüze geçtiğimizde import edeceğimiz kütüphane
+from typing import Any, Dict, List
 from langchain_core.prompts import PromptTemplate
-from langchain_classic import hub
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.agents import AgentAction
 from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agent_tools import get_agent_tools
@@ -15,6 +17,78 @@ os.environ["GEMINI_API_KEY"] = "AIzaSyBtWhPzT3tYkldFjBBDjxZDLKdGZTzJ92c"
 if "GEMINI_API_KEY" not in os.environ or os.environ["GEMINI_API_KEY"].startswith("AIzaSyYour"):
     print("[Hata] Lütfen os.environ[\"GEMINI_API_KEY\"] alanına kendi gerçek API anahtarınızı yazın!")
     exit()
+
+# class HackathonAgentUXHandler(BaseCallbackHandler):
+#     """Ajanın adımlarını hem konsola hem de Streamlit arayüzüne CANLI akıtır."""
+    
+#     def __init__(self):
+#         # Streamlit ekranında dönen bir yükleme animasyonu ile durum kutusu açıyoruz
+#         # expanded=True sayesinde ajan çalıştıkça içi canlı olarak dolacak
+#         self.status_box = st.status("🤖 Ajan işlem döngüsü başlatıldı...", expanded=True)
+    
+#     def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
+#         tool_name = action.tool
+#         tool_input = action.tool_input
+        
+#         # 1. Konsola basmaya devam ediyoruz (Yazılımcı takibi için)
+#         print(f"\n🤖 [AJAN DÜŞÜNÜYOR] -> {tool_name} tetikleniyor...")
+        
+#         # 2. AYNI ANDA STREAMLIT EKRANINI GÜNCELLİYORUZ (Kullanıcı takibi için)
+#         # st.status nesnesi içine yazılan her şey arayüzde anlık (real-time) belirir
+#         if tool_name == "legal_risk_search_tool":
+#             self.status_box.write("⚖️ **Durum:** Şirketin yasal dökümanları ve patent davaları taranıyor...")
+#         elif tool_name == "financial_risk_search_tool":
+#             self.status_box.write("💰 **Durum:** Şirketin likidite durumu ve borç yapısı inceleniyor...")
+#         else:
+#             self.status_box.write(f"🔍 **Durum:** `{tool_name}` aracı tetikleniyor...")
+            
+#         self.status_box.write(f"📌 *Hedef Sorgu:* `{tool_input}`")
+
+#     def on_tool_end(self, output: Any, **kwargs: Any) -> None:
+#         data_length = len(str(output))
+        
+#         # Konsol logu
+#         print(f"✅ [VERİ ALINDI] -> {data_length} karakter.")
+        
+#         # Streamlit arayüzünde alt adım olarak tik işaretiyle görünür
+#         self.status_box.write(f"✅ **Veri Alındı:** {data_length} karakter veri hafızaya alındı. Analiz ediliyor...")
+
+#     def on_agent_finish(self, finish: Any, **kwargs: Any) -> None:
+#         # Ajan nihai cevaba ulaştığında dönen yükleme animasyonunu durdurur 
+#         # ve kutuyu yeşil bir "Başarılı" tikine çevirir
+#         self.status_box.update(label="🎉 Due Diligence Risk Analizi Tamamlandı!", state="complete")
+
+
+
+# === FAZ 7: CANLI UX LOG YAKALAYICI (CALLBACK HANDLER) ===
+class HackathonAgentUXHandler(BaseCallbackHandler):
+    """Ajanın arka plandaki teknik adımlarını temiz ve kurumsal bir UX akışına dönüştürür."""
+    
+    def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
+        """Ajan bir aracı (tool) çalıştırmaya karar verdiğinde tetiklenir."""
+        tool_name = action.tool
+        tool_input = action.tool_input
+        
+        print("\n" + "="*50)
+        print(f"🤖 [AJAN DÜŞÜNÜYOR] -> Bir sonraki adıma karar verdim.")
+        
+        # Araç ismine göre kullanıcı dostu Türkçe durum mesajları üretiyoruz
+        if tool_name == "legal_risk_search_tool":
+            print(f"⚖️  [DURUM] Şirketin yasal dökümanları ve patent davaları taranıyor...")
+        elif tool_name == "financial_risk_search_tool":
+            print(f"💰 [DURUM] Şirketin likidite durumu, borç yapısı ve taahhütleri inceleniyor...")
+        else:
+            print(f"🔍 [DURUM] '{tool_name}' aracı tetikleniyor...")
+            
+        print(f"📌 [HEDEF SORGU]  -> \"{tool_input}\"")
+        print("="*50)
+
+    def on_tool_end(self, output: Any, **kwargs: Any) -> None:
+        """Çalıştırılan araç veritabanından cevabı getirip bitirdiğinde tetiklenir."""
+        # Kullanıcıya dökümanın tamamını basıp ekranı kirletmiyoruz, sadece bilgi veriyoruz
+        data_length = len(str(output))
+        print(f"✅ [VERİ ALINDI]  -> İlgili döküman parçaları başarıyla çekildi ({data_length} karakter veri hafızaya alındı). Analiz ediliyor...")
+
 
 print("[Beyin] Gemini 2.5 Flash modeli hazırlanıyor...")
 llm = ChatGoogleGenerativeAI(
@@ -48,15 +122,19 @@ react_prompt = PromptTemplate.from_template(react_template)
 print("[Ajan] ReAct Ajanı oluşturuluyor...")
 agent = create_react_agent(llm, get_agent_tools, react_prompt)
 
+# Yürütücü motora (Executor) kendi yazdığımız UX handler'ı teslim ediyoruz.
+# verbose=False yaptık çünkü artık kalabalık loglar yerine kendi şık loglarımızı basacağız!
 agent_executor = AgentExecutor(
     agent=agent, 
     tools=get_agent_tools, 
     verbose=True, 
-    handle_parsing_errors=True 
+    handle_parsing_errors=True,
+    callbacks=[HackathonAgentUXHandler()] 
 )
 
 if __name__ == "__main__":
-    print("\n=== AGENT 1: DUE DILIGENCE RISK ANALİZİ (FAZ 6) BAŞLADI ===")
+    print("\n=== AGENT 1: DUE DILIGENCE RISK ANALİZİ BAŞLADI ===")
+    print("[Sistem] Ajan uyandırıldı, döküman analiz görevi başlatılıyor. Lütfen bekleyin...")
     
     # Yeni Katı ve Detaylı JSON Şeması Promptu
     user_query = (
@@ -88,8 +166,9 @@ if __name__ == "__main__":
         "}"
     )
     
-    # Ajanı tetikliyoruz
     response = agent_executor.invoke({"input": user_query})
     
-    print("\n=== AJANIN NİHAİ YAPILANDIRILMIŞ RAPOR ÇIKTISI (FAZ 6) ===")
+    print("\n" + "="*50)
+    print("=== AJANIN NİHAİ YAPILANDIRILMIŞ RAPOR ÇIKTISI (FAZ 7) ===")
+    print("="*50)
     print(response["output"])
