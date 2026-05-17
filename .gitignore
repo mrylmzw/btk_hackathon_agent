@@ -1,0 +1,5 @@
+venv/
+chroma_db/
+sec-edgar-filings/
+__pycache__/
+.env
