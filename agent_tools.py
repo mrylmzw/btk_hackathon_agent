@@ -1,78 +1,93 @@
-from langchain_core.tools import tool
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.tools import tool
 
-# 1. Hafızadaki veritabanı ve embedding modelini yeniden yüklüyoruz
-# (Faz 2 ile aynı parametreleri kullanmak zorundayız ki vektörler eşleşsin)
-print("[Araçlar] Embedding modeli yükleniyor...")
-embedding_model = HuggingFaceEmbeddings(
+# === 🧠 GLOBAL BAĞLANTILAR ===
+# Embedding modeli ve veritabanı bağlantısı sadece bir kez, globalde ayağa kalkar.
+print("[Araçlar] Ortak embedding modeli hafızaya yükleniyor...")
+embeddings = HuggingFaceEmbeddings(
     model_name="BAAI/bge-large-en-v1.5",
     model_kwargs={'device': 'cpu'},
     encode_kwargs={'normalize_embeddings': True}
 )
 
-print("[Araçlar] Kayıtlı ChromaDB veritabanına bağlanılıyor...")
-db = Chroma(
-    persist_directory="./chroma_db", 
-    embedding_function=embedding_model
-)
+print("[Araçlar] Yerel ChromaDB havuzuna bağlantı kuruluyor...")
+db = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
 
-# 2. Ajanın kullanacağı filtreli araçları (Tools) tanımlıyoruz
-# @tool dekoratörü ve altındaki docstring (açıklama metni) ÇOK KRİTİKTİR.
-# LLM, bu açıklamaları okuyarak hangi aracı ne zaman seçeceğine karar verir.
 
-@tool
-def legal_risk_search_tool(query: str) -> str:
+def get_agent_tools(target_ticker: str):
     """
-    Use this tool to search for legal risks, ongoing lawsuits, patent claims, 
-    government regulations, fines, and legal proceedings about the company.
-    Input should be a specific search query related to legal issues.
+    Ajanın kullanacağı arama araçlarını dinamik olarak üretir.
+    İçerideki katı '$and' filtresi sayesinde ajan asla aranan şirketin dışına çıkamaz.
     """
-    # Sadece 'hukuk' etiketli chunk'lar arasında arama yapar
-    docs = db.similarity_search(query, k=4, filter={"bölüm": "hukuk"})
-    
-    if not docs:
-        return "No relevant legal documents found for this query."
+    ticker_clean = target_ticker.upper().strip()
+
+    @tool
+    def legal_risk_search_tool(query: str) -> str:
+        """
+        Use this tool to search for legal risks, ongoing lawsuits, patent claims, 
+        government regulations, fines, and legal proceedings about the company.
+        Input should be a specific search query related to legal issues.
+        """
+        # ⚖️ ÇİFT KRİTERLİ KATI FİLTRE: Hem hukuk bölümü olacak HEM DE sadece bu şirket olacak!
+        docs = db.similarity_search(
+            query, 
+            k=4, 
+            filter={"$and": [{"bölüm": "hukuk"}, {"ticker": ticker_clean}]}
+        )
         
-    # Bulunan sonuçları ajanın rahat okuyabileceği tek bir metin haline getiriyoruz
-    results = []
-    for i, doc in enumerate(docs):
-        results.append(f"[Legal Source {i+1}]:\n{doc.page_content}\n")
-    
-    return "\n---\n".join(results)
-
-
-@tool
-def financial_risk_search_tool(query: str) -> str:
-    """
-    Use this tool to search for financial health, revenues, balance sheet details, 
-    debts, losses, liquidity issues, and management's discussion about financial risks.
-    Input should be a specific search query related to accounting or financial metrics.
-    """
-    # Sadece 'finans' etiketli chunk'lar arasında arama yapar
-    docs = db.similarity_search(query, k=4, filter={"bölüm": "finans"})
-    
-    if not docs:
-        return "No relevant financial documents found for this query."
+        if not docs:
+            return f"No relevant legal records found for {ticker_clean} regarding this query."
+            
+        results = []
+        for i, doc in enumerate(docs):
+            results.append(f"[Legal Source {i+1}]:\n{doc.page_content}\n")
         
-    results = []
-    for i, doc in enumerate(docs):
-        results.append(f"[Financial Source {i+1}]:\n{doc.page_content}\n")
-    
-    return "\n---\n".join(results)
+        return "\n---\n".join(results)
+
+    @tool
+    def financial_risk_search_tool(query: str) -> str:
+        """
+        Use this tool to search for financial health, revenues, balance sheet details, 
+        debts, losses, liquidity issues, and financial risks.
+        Input should be a specific search query related to accounting or financial metrics.
+        """
+        # 💰 ÇİFT KRİTERLİ KATI FİLTRE: Hem finans bölümü olacak HEM DE sadece bu şirket olacak!
+        docs = db.similarity_search(
+            query, 
+            k=4, 
+            filter={"$and": [{"bölüm": "finans"}, {"ticker": ticker_clean}]}
+        )
+        
+        if not docs:
+            return f"No relevant financial records found for {ticker_clean} regarding this query."
+            
+        results = []
+        for i, doc in enumerate(docs):
+            results.append(f"[Financial Source {i+1}]:\n{doc.page_content}\n")
+        
+        return "\n---\n".join(results)
+
+    # Ajan yürütücüsüne (Executor) teslim edilecek dinamik araç listesi
+    return [legal_risk_search_tool, financial_risk_search_tool]
 
 
-# 3. Araçları bir liste altında topluyoruz (Ajanın beynine bu listeyi vereceğiz)
-get_agent_tools = [legal_risk_search_tool, financial_risk_search_tool]
-
+# === DOSYA DOĞRULAMA TEST ALANI ===
 if __name__ == "__main__":
-    print("\n--- Araç Fonksiyonelliği Doğrulama Testi ---")
+    print("\n--- Dinamik Araç Fonksiyonelliği Doğrulama Testi ---")
     
-    # Ajan gibi davranıp aracı manuel test edelim
-    print("\n[Test 1] Legal_Risk_Search_Tool çalıştırılıyor...")
-    legal_output = legal_risk_search_tool.invoke({"query": "patent infringement and government fines"})
+    # Test etmek istediğimiz şirketi seçiyoruz
+    TEST_TICKER = "AAPL"
+    
+    # Fabrikadan o şirkete özel kısıtlanmış araç listesini alıyoruz
+    test_tools = get_agent_tools(TEST_TICKER)
+    legal_tool = test_tools[0]
+    financial_tool = test_tools[1]
+    
+    print(f"\n[Test 1] {TEST_TICKER} için Legal_Risk_Search_Tool çalıştırılıyor...")
+    legal_output = legal_tool.invoke({"query": "patent infringement and government fines"})
     print(legal_output[:300] + "\n... (Devamı Var) ...")
     
-    print("\n[Test 2] Financial_Risk_Search_Tool çalıştırılıyor...")
-    financial_output = financial_risk_search_tool.invoke({"query": "liquidity, debt and net sales trends"})
+    print(f"\n[Test 2] {TEST_TICKER} için Financial_Risk_Search_Tool çalıştırılıyor...")
+    financial_output = financial_tool.invoke({"query": "liquidity, debt and purchase obligations"})
     print(financial_output[:300] + "\n... (Devamı Var) ...")

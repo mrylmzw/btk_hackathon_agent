@@ -1,82 +1,38 @@
 import os
-# import streamlit as st  # Arayüze geçtiğimizde import edeceğimiz kütüphane
-from typing import Any, Dict, List
+from typing import Any
 from langchain_core.prompts import PromptTemplate
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.agents import AgentAction
 from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
-from agent_tools import get_agent_tools
 
-# 1. API Anahtarı Kontrolü
-# Eğer terminalden 'set' etmediyseniz, aşağıdaki satırın yorum satırını kaldırıp anahtarınızı yazabilirsiniz:
-# os.environ["GEMINI_API_KEY"] = "AIzaSy..."
-# KODUN BAŞINA DOĞRUDAN EKLEYİN:
-os.environ["GEMINI_API_KEY"] = "AIzaSyBtWhPzT3tYkldFjBBDjxZDLKdGZTzJ92c"
+# Yeni geliştirdiğimiz modülleri ve akıllı fonksiyonları içeri aktarıyoruz
+from agent_tools import get_agent_tools
+from vector_storage import ingest_and_store_ticker
+
+# API Anahtarı Tanımlama (Mevcut çalışan anahtarınız korundu)
+os.environ["GEMINI_API_KEY"] = "AIzaSyDCgN4CeMMzkfuIZ-_JKuiTIyP6pfFL52k"
 
 if "GEMINI_API_KEY" not in os.environ or os.environ["GEMINI_API_KEY"].startswith("AIzaSyYour"):
-    print("[Hata] Lütfen os.environ[\"GEMINI_API_KEY\"] alanına kendi gerçek API anahtarınızı yazın!")
+    print("[Hata] Lütfen geçerli bir API anahtarı tanımlayın!")
     exit()
 
-# class HackathonAgentUXHandler(BaseCallbackHandler):
-#     """Ajanın adımlarını hem konsola hem de Streamlit arayüzüne CANLI akıtır."""
-    
-#     def __init__(self):
-#         # Streamlit ekranında dönen bir yükleme animasyonu ile durum kutusu açıyoruz
-#         # expanded=True sayesinde ajan çalıştıkça içi canlı olarak dolacak
-#         self.status_box = st.status("🤖 Ajan işlem döngüsü başlatıldı...", expanded=True)
-    
-#     def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
-#         tool_name = action.tool
-#         tool_input = action.tool_input
-        
-#         # 1. Konsola basmaya devam ediyoruz (Yazılımcı takibi için)
-#         print(f"\n🤖 [AJAN DÜŞÜNÜYOR] -> {tool_name} tetikleniyor...")
-        
-#         # 2. AYNI ANDA STREAMLIT EKRANINI GÜNCELLİYORUZ (Kullanıcı takibi için)
-#         # st.status nesnesi içine yazılan her şey arayüzde anlık (real-time) belirir
-#         if tool_name == "legal_risk_search_tool":
-#             self.status_box.write("⚖️ **Durum:** Şirketin yasal dökümanları ve patent davaları taranıyor...")
-#         elif tool_name == "financial_risk_search_tool":
-#             self.status_box.write("💰 **Durum:** Şirketin likidite durumu ve borç yapısı inceleniyor...")
-#         else:
-#             self.status_box.write(f"🔍 **Durum:** `{tool_name}` aracı tetikleniyor...")
-            
-#         self.status_box.write(f"📌 *Hedef Sorgu:* `{tool_input}`")
 
-#     def on_tool_end(self, output: Any, **kwargs: Any) -> None:
-#         data_length = len(str(output))
-        
-#         # Konsol logu
-#         print(f"✅ [VERİ ALINDI] -> {data_length} karakter.")
-        
-#         # Streamlit arayüzünde alt adım olarak tik işaretiyle görünür
-#         self.status_box.write(f"✅ **Veri Alındı:** {data_length} karakter veri hafızaya alındı. Analiz ediliyor...")
-
-#     def on_agent_finish(self, finish: Any, **kwargs: Any) -> None:
-#         # Ajan nihai cevaba ulaştığında dönen yükleme animasyonunu durdurur 
-#         # ve kutuyu yeşil bir "Başarılı" tikine çevirir
-#         self.status_box.update(label="🎉 Due Diligence Risk Analizi Tamamlandı!", state="complete")
-
-
-
-# === FAZ 7: CANLI UX LOG YAKALAYICI (CALLBACK HANDLER) ===
+# === CANLI UX LOG YAKALAYICI ===
 class HackathonAgentUXHandler(BaseCallbackHandler):
-    """Ajanın arka plandaki teknik adımlarını temiz ve kurumsal bir UX akışına dönüştürür."""
+    """Ajanın teknik döngüsünü temiz ve kurumsal bir terminal akışına dönüştürür."""
     
     def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
-        """Ajan bir aracı (tool) çalıştırmaya karar verdiğinde tetiklenir."""
         tool_name = action.tool
         tool_input = action.tool_input
         
         print("\n" + "="*50)
         print(f"🤖 [AJAN DÜŞÜNÜYOR] -> Bir sonraki adıma karar verdim.")
         
-        # Araç ismine göre kullanıcı dostu Türkçe durum mesajları üretiyoruz
         if tool_name == "legal_risk_search_tool":
-            print(f"⚖️  [DURUM] Şirketin yasal dökümanları ve patent davaları taranıyor...")
+            print(f"⚖️  [DURUM] Hedef şirketin yasal dökümanları ve patent davaları taranıyor...")
         elif tool_name == "financial_risk_search_tool":
-            print(f"💰 [DURUM] Şirketin likidite durumu, borç yapısı ve taahhütleri inceleniyor...")
+            print(f"💰 [DURUM] Hedef şirketin likidite durumu, borç yapısı ve taahhütleri inceleniyor...")
         else:
             print(f"🔍 [DURUM] '{tool_name}' aracı tetikleniyor...")
             
@@ -84,25 +40,39 @@ class HackathonAgentUXHandler(BaseCallbackHandler):
         print("="*50)
 
     def on_tool_end(self, output: Any, **kwargs: Any) -> None:
-        """Çalıştırılan araç veritabanından cevabı getirip bitirdiğinde tetiklenir."""
-        # Kullanıcıya dökümanın tamamını basıp ekranı kirletmiyoruz, sadece bilgi veriyoruz
         data_length = len(str(output))
         print(f"✅ [VERİ ALINDI]  -> İlgili döküman parçaları başarıyla çekildi ({data_length} karakter veri hafızaya alındı). Analiz ediliyor...")
 
 
-print("[Beyin] Gemini 2.5 Flash modeli hazırlanıyor...")
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", 
-    temperature=0.1  # Tutarlılık ve katı format uyumu için düşük sıcaklık
-)
-
-print("[Sistem] Yerel ReAct Prompt şablonu yükleniyor...")
-react_template = """Answer the following questions as best you can. You have access to the following tools:
-
+if __name__ == "__main__":
+    print("\n" + "="*50)
+    print("      M&A DUE DILIGENCE AUTOMATED AGENT PANEL v2.0   ")
+    print("="*50)
+    
+    # Kullanıcıdan veya jüriden dinamik borsa kodunu alıyoruz
+    target_ticker = input("\n🔍 Analiz etmek istediğiniz şirket kodunu girin (Örn: AAPL, TSLA, MSFT): ").strip().upper()
+    
+    if not target_ticker:
+        print("[Hata] Şirket kodu boş bırakılamaz!")
+        exit()
+        
+    print(f"\n🗄️  {target_ticker} için yerel hafıza katmanı kontrol ediliyor...")
+    
+    # --- ⚡ AKILLI OTOMASYON TETİKLEYİCİSİ ---
+    # vector_storage içindeki yeni fonksiyonumuz çalışıyor: Yerelde varsa 1 saniyede geçer, yoksa otomatik indirip indeksler!
+    ingest_and_store_ticker(target_ticker)
+    
+    print(f"\n🚀 {target_ticker} için kısıtlanmış araç seti fabrikadan çekiliyor...")
+    # Sadece girdiğimiz şirkete ait verileri okuyabilecek KATI filtreli araçları üretiyoruz
+    dynamic_tools = get_agent_tools(target_ticker)
+    
+    print("[Beyin] Gemini 2.5 Flash modeli hazırlanıyor...")
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1)
+    
+    # ReAct Şablon Yapısı
+    react_template = """Answer the following questions as best you can. You have access to the following tools:
 {tools}
-
 Use the following format:
-
 Question: the input question you must answer
 Thought: you should always think about what to do
 Action: the action to take, should be one of [{tool_names}]
@@ -113,32 +83,26 @@ Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
 Begin!
-
 Question: {input}
 Thought:{agent_scratchpad}"""
 
-react_prompt = PromptTemplate.from_template(react_template)
-
-print("[Ajan] ReAct Ajanı oluşturuluyor...")
-agent = create_react_agent(llm, get_agent_tools, react_prompt)
-
-# Yürütücü motora (Executor) kendi yazdığımız UX handler'ı teslim ediyoruz.
-# verbose=False yaptık çünkü artık kalabalık loglar yerine kendi şık loglarımızı basacağız!
-agent_executor = AgentExecutor(
-    agent=agent, 
-    tools=get_agent_tools, 
-    verbose=True, 
-    handle_parsing_errors=True,
-    callbacks=[HackathonAgentUXHandler()] 
-)
-
-if __name__ == "__main__":
-    print("\n=== AGENT 1: DUE DILIGENCE RISK ANALİZİ BAŞLADI ===")
-    print("[Sistem] Ajan uyandırıldı, döküman analiz görevi başlatılıyor. Lütfen bekleyin...")
+    react_prompt = PromptTemplate.from_template(react_template)
     
-    # Yeni Katı ve Detaylı JSON Şeması Promptu
+    # Ajanı ve Yürütücü Motoru dinamik araçlarla tam burada ayağa kaldırıyoruz
+    agent = create_react_agent(llm, dynamic_tools, react_prompt)
+    agent_executor = AgentExecutor(
+        agent=agent, 
+        tools=dynamic_tools, 
+        verbose=False, # Karmaşık ham logları gizle
+        handle_parsing_errors=True,
+        callbacks=[HackathonAgentUXHandler()] # Şık log akışımız devrede
+    )
+    
+    print(f"\n🔥 Yapay zeka akıl yürütme döngüsü başladı. {target_ticker} analiz ediliyor...")
+    
+    # Gelişmiş, Skorlamalı ve Atıflı JSON Prompt Sözleşmesi
     user_query = (
-        "Analyze the uploaded company records using your search tools. "
+        f"Analyze the corporate records and SEC filings specifically for the target company: {target_ticker}. "
         "Identify critical patent infringements, legal lawsuits, and analyze financial health (liquidity, debt, purchase obligations). "
         "\n\n"
         "CRITICAL RULE: Your Final Answer MUST be ONLY a raw JSON string. Do not wrap it in markdown code blocks like ```json. "
@@ -169,6 +133,6 @@ if __name__ == "__main__":
     response = agent_executor.invoke({"input": user_query})
     
     print("\n" + "="*50)
-    print("=== AJANIN NİHAİ YAPILANDIRILMIŞ RAPOR ÇIKTISI (FAZ 7) ===")
+    print(f"=== AJANIN NİHAİ RAPOR ÇIKTISI ({target_ticker}) ===")
     print("="*50)
     print(response["output"])
