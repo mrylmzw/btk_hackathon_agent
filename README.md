@@ -45,41 +45,47 @@ pip install -r requirements.txt
 
 ```
 
-### 4. API Anahtarını Yapılandırın
+### 4. API Anahtarlarını Ayarlayın
 
-Ajanın çalışabilmesi için geçerli bir Gemini API anahtarına ihtiyacınız vardır.
+Proje klasörünün içine aşağıdaki .txt dosyalarını oluşturun ve sadece ilgili anahtarı içine yapıştırın (tırnak işareti veya boşluk olmadan):
 
-* `agent_brain.py` dosyasını açın.
-* `os.environ["GEMINI_API_KEY"] = "AIzaSy..."` alanına kendi güncel API anahtarınızı yapıştırın ve dosyayı kaydedin.
+geminiapi_key.txt: Google Gemini API anahtarı.
 
-### 5. Veritabanını İlklendirin (İlk Çalıştırma)
+tavilyapi_key.txt: Tavily AI Search API anahtarı.
 
-`.gitignore` kuralları gereği ham dökümanlar ve vektör veritabanı depoya yüklenmez. Ajanı çalıştırmadan önce veritabanının otomatik oluşturulması için `vector_storage.py` dosyasını bir kez çalıştırmalısınız. Bu işlem hedef şirketin (Örn: AAPL) dökümanlarını indirecek, akıllı chunking yapacak ve yerel ChromaDB'yi besleyecektir:
+langchainapi_key.txt: (Opsiyonel) LangSmith izleme anahtarı.
 
-```bash
-python vector_storage.py
+### 5. 🚀 Çalıştırma
 
-```
 
-*(Not: İlk çalıştırmada embedding modeli HuggingFace'den indirileceği için internet hızınıza bağlı olarak birkaç dakika sürebilir.)*
-
-### 6. Ajanı Tetikleyin
-
-Veritabanı başarıyla oluştuktan sonra, ReAct ajanını başlatabilir ve risk analiz raporunu üretebilirsiniz:
+Tüm süreci (indirme, arama ve sentez) tek bir komutla paralel olarak başlatmak için:
 
 ```bash
-python agent_brain.py
-
+python orchestrator.py
+#Sistem size desteklenen şirketlerden birini seçmenizi veya bir ticker (Örn: AAPL, TSLA) girmenizi isteyecektir.
 ```
 
----
+### 6. 📈 Çıktılar
 
-## 🛠️ Proje Mimari Yapısı
+📈 Çıktılar
+Sistem çalışırken temp_a1_output.json ve temp_a2_output.txt gibi ara raporlar üretir. Nihai analiz sonucu ise final_ma_decision.json dosyasına kaydedilir.
 
-* **`ingestion.py`:** SEC sisteminden 10-K raporlarını indirir, HTML etiketlerini normalleştirir, tabloları Markdown formatına çevirir ve veriyi `Item 1A/3` (Hukuk) ve `Item 7` (Finans) olarak esnek regex yapısıyla akıllıca ayırır.
-* **`vector_storage.py`:** Ayrıştırılan metinleri anlamsal bütünlüğü koruyarak alt parçalara (chunks) böler, `BAAI/bge-large-en-v1.5` modeliyle embedding işlemine sokar ve metadata etiketleriyle birlikte yerel `chroma_db` klasörüne kaydeder.
-* **`agent_tools.py`:** Ajanın veritabanında nokta atışı arama yapmasını sağlayan, arkasında otomatik metadata filtreleri barındıran kısıtlı arama araçlarını (`Tools`) tanımlar.
-* **`agent_brain.py`:** `gemini-2.5-flash` (veya sunumda `gemini-2.5-pro`) modelini kullanarak ReAct akıl yürütme döngüsünü yönetir ve nihai çıktıyı katı bir JSON string formatında döndürür.
+## 📁 Dosya Yapısı
+orchestrator.py: Ana yönetim merkezi. Ajanları paralel çalıştırır.
+
+agent_brain.py: Ajan 1'in beyin mekanizması.
+
+agent2_deneme.py: Ajan 2'nin haber tarama mantığı.
+
+agent3_deneme.py: Ajan 3'ün sentez ve karar verme katmanı.
+
+vector_storage.py: RAG için veritabanı yönetimi (ChromaDB).
+
+ingestion.py: SEC verilerinin indirilmesi ve ayrıştırılması.
+
+companies.py: Desteklenen şirketlerin eşleşme listesi.
+
+agent_tools.py: Ajanların kullandığı RAG araçları.
 
 ## 📦 Gereksinimler (`requirements.txt`)
 
