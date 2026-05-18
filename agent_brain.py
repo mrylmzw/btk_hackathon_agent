@@ -10,12 +10,20 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from agent_tools import get_agent_tools
 from vector_storage import ingest_and_store_ticker
 
-# API Anahtarı Tanımlama (Mevcut çalışan anahtarınız korundu)
-os.environ["GEMINI_API_KEY"] = "AIzaSyDCgN4CeMMzkfuIZ-_JKuiTIyP6pfFL52k"
 
-if "GEMINI_API_KEY" not in os.environ or os.environ["GEMINI_API_KEY"].startswith("AIzaSyYour"):
-    print("[Hata] Lütfen geçerli bir API anahtarı tanımlayın!")
-    exit()
+def setup_agent1_env():
+    # Arkadaşının kullandığı formatla uyumlu hale getiriyoruz
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    gemini_key_path = os.path.join(current_dir, "geminiapi_key.txt")
+    with open(gemini_key_path, "r") as f:
+        os.environ["GEMINI_API_KEY"] = f.read().strip()
+        os.environ["GOOGLE_API_KEY"] = os.environ["GEMINI_API_KEY"] # Ajan 3 ile uyum için
+# # API Anahtarı Tanımlama (Mevcut çalışan anahtarınız korundu)
+# os.environ["GEMINI_API_KEY"] = "AIzaSyDCgN4CeMMzkfuIZ-_JKuiTIyP6pfFL52k"
+
+# if "GEMINI_API_KEY" not in os.environ or os.environ["GEMINI_API_KEY"].startswith("AIzaSyYour"):
+#     print("[Hata] Lütfen geçerli bir API anahtarı tanımlayın!")
+#     exit()
 
 
 # === CANLI UX LOG YAKALAYICI ===
@@ -43,19 +51,13 @@ class HackathonAgentUXHandler(BaseCallbackHandler):
         data_length = len(str(output))
         print(f"✅ [VERİ ALINDI]  -> İlgili döküman parçaları başarıyla çekildi ({data_length} karakter veri hafızaya alındı). Analiz ediliyor...")
 
-
-if __name__ == "__main__":
-    print("\n" + "="*50)
-    print("      M&A DUE DILIGENCE AUTOMATED AGENT PANEL v2.0   ")
-    print("="*50)
-    
-    # Kullanıcıdan veya jüriden dinamik borsa kodunu alıyoruz
-    target_ticker = input("\n🔍 Analiz etmek istediğiniz şirket kodunu girin (Örn: AAPL, TSLA, MSFT): ").strip().upper()
+def run_agent1(target_ticker: str):
+    setup_agent1_env()
     
     if not target_ticker:
         print("[Hata] Şirket kodu boş bırakılamaz!")
         exit()
-        
+    
     print(f"\n🗄️  {target_ticker} için yerel hafıza katmanı kontrol ediliyor...")
     
     # --- ⚡ AKILLI OTOMASYON TETİKLEYİCİSİ ---
@@ -131,8 +133,19 @@ Thought:{agent_scratchpad}"""
     )
     
     response = agent_executor.invoke({"input": user_query})
-    
+    output = response["output"]
     print("\n" + "="*50)
     print(f"=== AJANIN NİHAİ RAPOR ÇIKTISI ({target_ticker}) ===")
     print("="*50)
-    print(response["output"])
+    print(output)
+    return output
+
+
+
+if __name__ == "__main__":
+    print("\n" + "="*50)
+    print("      M&A DUE DILIGENCE AUTOMATED AGENT PANEL v2.0   ")
+    print("="*50)
+    run_agent1(target_ticker="TSLA")
+     
+    
